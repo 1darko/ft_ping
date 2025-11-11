@@ -19,8 +19,11 @@
 #include <netpacket/packet.h> /* sockaddr_ll (AF_PACKET) */
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
+#include <limits.h>
 
 #define PAYLOAD_SIZE 56
+#define PLAYLOAD_MAX 1473
+
 typedef struct __attribute__((packed)){
    uint8_t dest_addr[ETH_ALEN]; /* Destination hardware address */
    uint8_t src_addr[ETH_ALEN];  /* Source hardware address */
@@ -44,8 +47,10 @@ typedef struct {
    int v;
    int D;
    int w;
-   int c;
-   int s;
+   char *c;
+   int c_value;
+   char *s;
+   int s_value;
    int flood;
    char* i;
    int i_is_set;

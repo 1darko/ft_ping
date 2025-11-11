@@ -36,12 +36,59 @@ void print_question_mark(){
     printf("Flags -f and -i are mutually exclusive.\n");
 }
 
+int isnumeric(const char *str){
+    while(*str){
+        if(*str < '0' || *str > '9')
+            return 0; 
+        str++;
+    }
+    return 1;
+}
+
+void value_error(const char *value, char near_char, int type){
+    fprintf(stderr, "ping: invalid value (`%s' near `%c')\n", type ? value + 2 : value, near_char);
+    fprintf(stderr, "Try 'ft_ping -?' for more information.\n");
+}
+
+int int_overflow(char *a)
+{
+    if(!a)
+        return 0;
+    if(strlen(a) > 10)
+        return 1;
+    if(strlen(a) == 10){
+        if(strcmp(a, "2147483647") > 0)
+            return 1;
+    }
+    return 0;
+}
+int flag_checker2(options *opts, char **av)
+{
+    if(opts->s < 0 || opts->s > 1473){
+        fprintf(stderr, "ft_ping: invalid payload size '%d'\n", opts->s);
+        return 1;
+    }
+    if(opts->flood && opts->i_is_set){
+        fprintf(stderr, "ft_ping: options '-f' and '-i' are mutually exclusive\n");
+        return 1;
+    }
+    printf("C: -%s-\n", opts->c);
+    if(int_overflow(opts->c)){
+        fprintf(stderr, "ft_ping: invalid count '%d'\n", opts->c);
+        return 1;
+    }
+    printf("bug\n");
+    if(int_overflow(opts->i)){
+        fprintf(stderr, "ft_ping: invalid interval '%s'\n", opts->i);
+        return 1;
+    }
+    return 0;
+
+}
 int flag_checker(int ac, char **av, options *opts, const char **dst_ip)
 {
     opts->s = PAYLOAD_SIZE; // to add option -s for payload size later
     // if bigger than 1473 or lesser than 0, should error out
-    opts->c = 2;
-    opts->flood = 0;
     // -c to add
     // -w to add
     int break_flag;
@@ -53,7 +100,7 @@ int flag_checker(int ac, char **av, options *opts, const char **dst_ip)
                 switch(av[i][j]){
                     case 'v':
                         opts->v = 1;
-                        break;
+                        break;  
                     case '?':
                         print_question_mark();
                         return 1;
@@ -61,29 +108,65 @@ int flag_checker(int ac, char **av, options *opts, const char **dst_ip)
                         opts->D = 1;
                         break;
                     case 'f':
-                        if(opts->i_is_set) {
-                            fprintf(stderr, "ft_ping: options '-f' and '-i' are mutually exclusive\n");
-                            return 1;
-                        }
                         opts->flood = 1;
                         break;
                     case 'i':
-                        if(opts->flood) {
-                            fprintf(stderr, "ft_ping: options '-f' and '-i' are mutually exclusive\n");
-                            return 1;
+                        if(av[i][j + 1] != '\0'){
+                            if(!isnumeric(&av[i][j + 1])){
+                                return (value_error(av[i], 'i', 1), 1);
+                            }
+                            opts->i = &av[i][j + 1];
+                            opts->i_is_set = 1;
+                            break_flag = 1;
+                            break;
                         }
-                        i++;
-                        if(i < ac && av[i][0] != '\0') {
+                        else if(++i < ac && av[i][0] != '\0') {
+                            if(!isnumeric(av[i])){
+                                return (value_error(av[i], 'i', 0), 1);
+                            }
                             opts->i = av[i];
                             opts->i_is_set = 1;
-                            printf("Interval set to %d seconds\n", opts->i);
-                            if(opts->i <= 0) {
-                                fprintf(stderr, "ft_ping: invalid interval '%s'\n", av[i]);
-                                return 1;
-                            }
                         }
                         else{
                             fprintf(stderr, "ft_ping: option '-i' requires an argument\n");
+                            return 1;
+                        }
+                        break_flag = 1;
+                        break;
+                    case 'c':
+                        if(av[i][j + 1] != '\0'){
+                            if(!isnumeric(&av[i][j + 1])){
+                                return (value_error(av[i], 'c', 1), 1);
+                            }
+                            opts->c = &av[i][j + 1];
+                        }
+                        else if(++i < ac && av[i][0] != '\0') {
+                            if(!isnumeric(av[i])){
+                                return (value_error(av[i], 'c', 0), 1);
+                            }
+                            opts->c = av[i];
+                        }
+                        else{
+                            fprintf(stderr, "ft_ping: option '-c' requires an argument\n");
+                            return 1;
+                        }
+                        break_flag = 1;
+                        break;
+                    case 's':
+                        if(av[i][j + 1] != '\0'){
+                            if(!isnumeric(&av[i][j + 1])){
+                                return (value_error(av[i], 's', 1), 1);
+                            }
+                            opts->s = &av[i][j + 1];
+                        }
+                        else if(++i < ac && av[i][0] != '\0') {
+                            if(!isnumeric(av[i])){
+                                return (value_error(av[i], 's', 0), 1);
+                            }
+                            opts->s = av[i];
+                        }
+                        else{
+                            fprintf(stderr, "ft_ping: option '-s' requires an argument\n");
                             return 1;
                         }
                         break_flag = 1;
@@ -92,24 +175,28 @@ int flag_checker(int ac, char **av, options *opts, const char **dst_ip)
                         fprintf(stderr, "ft_ping: invalid option -- '%c'\n", av[i][j]);
                         fprintf(stderr, "Try 'ft_ping -?' for more information.\n");
                         return 1;
+                    }
                 }
             }
+            else if(ip_found == 0){
+                *dst_ip = av[i];
+                ip_found = 1;
+            }
+            else{
+                fprintf(stderr, "ft_ping: extra argument '%s'\n", av[i]);
+                fprintf(stderr, "Try 'ft_ping -?' for more information.\n");
+                return 1;
+            }
         }
-        else if(ip_found == 0){
-            *dst_ip = av[i];
-            ip_found = 1;
-        }
-        else{
-            fprintf(stderr, "ft_ping: extra argument '%s'\n", av[i]);
+        if(!ip_found){
+            fprintf(stderr, "ft_ping: destination address required\n");
             fprintf(stderr, "Try 'ft_ping -?' for more information.\n");
             return 1;
-        }
     }
-    if(!ip_found){
-        fprintf(stderr, "ft_ping: destination address required\n");
-        fprintf(stderr, "Try 'ft_ping -?' for more information.\n");
+    if(flag_checker2(opts, av))
         return 1;
-    }
+    opts->s_value = (opts->s ? atoi(opts->s) : PAYLOAD_SIZE);
+    opts->c_value = (opts->c ? atoi(opts->c) : INT_MAX);
     return 0;
 };
 
@@ -204,7 +291,7 @@ int main(int ac, char **av) {
     // Sending packet(s)
     char buf[1500];
     struct timeval tv_send, tv_recv;
-    for(uint16_t seq = 0; seq < opts.c; seq++)
+    for(uint16_t seq = 0; seq < opts.c_value; seq++)
     {   
         icmph->un.echo.sequence = htons(seq);
         icmph->checksum = 0;
@@ -235,7 +322,7 @@ int main(int ac, char **av) {
                     seq,
                     recv_iph->ttl,
                     (tv_recv.tv_sec - tv_send.tv_sec) * 1000.0 + (tv_recv.tv_usec - tv_send.tv_usec) / 1000.0);
-                    if(!opts.flood && seq + 1 < opts.c)
+                    if(!opts.flood && seq + 1 < opts.c_value)
                         sleep(atoi(opts.i_is_set ? opts.i : "1"));
                     break;
             };

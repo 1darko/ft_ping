@@ -54,6 +54,8 @@ typedef struct {
    int flood;
    char* i;
    int i_is_set;
+   int q;
+   int r;
 
 } options;
 

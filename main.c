@@ -32,7 +32,9 @@ void print_question_mark(){
     printf("  -c count         Stop after sending count ECHO_REQUEST packets\n");
     printf("  -s size          Specify the number of data bytes to be sent\n");
     printf("  -f               Enable flood ping (send packets as fast as possible)\n");
-    printf("  -i time         Wait interval seconds between sending each packet\n");
+    printf("  -i time          Wait interval seconds between sending each packet\n");
+    printf("  -q               Quiet output\n");
+    printf("  -r               Record route\n");
     printf("Flags -f and -i are mutually exclusive.\n");
 }
 
@@ -64,8 +66,8 @@ int int_overflow(char *a)
 }
 int flag_checker2(options *opts, char **av)
 {
-    if(opts->s < 0 || opts->s > 1473){
-        fprintf(stderr, "ft_ping: invalid payload size '%d'\n", opts->s);
+    if(opts->s_value < 0 || opts->s_value > 1473){
+        fprintf(stderr, "ft_ping: invalid payload size '%d'\n", opts->s_value);
         return 1;
     }
     if(opts->flood && opts->i_is_set){
@@ -87,7 +89,7 @@ int flag_checker2(options *opts, char **av)
 }
 int flag_checker(int ac, char **av, options *opts, const char **dst_ip)
 {
-    opts->s = PAYLOAD_SIZE; // to add option -s for payload size later
+    opts->s_value = PAYLOAD_SIZE; // to add option -s for payload size later
     // if bigger than 1473 or lesser than 0, should error out
     // -c to add
     // -w to add
@@ -107,8 +109,15 @@ int flag_checker(int ac, char **av, options *opts, const char **dst_ip)
                     case 'D':
                         opts->D = 1;
                         break;
+                    case 'q':
+                        opts->q = 1;
+                        break;
+                    case 'r':
+                        opts->r = 1;
+                        break;
                     case 'f':
                         opts->flood = 1;
+                        opts->q = 1;
                         break;
                     case 'i':
                         if(av[i][j + 1] != '\0'){
@@ -230,6 +239,12 @@ int main(int ac, char **av) {
         perror("setsockopt IP_HDRINCL");
         return 1;
     };
+    if(opts.r){
+        if(setsockopt(send_sock, IPPROTO_IP, IP_OPTIONS, &on, sizeof(on)) < 0){
+            perror("setsockopt IP_OPTIONS");
+            return 1;
+        };
+    }
     // receiving part ------------
     int sock_recv = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
     if(sock_recv < 0){
@@ -244,9 +259,9 @@ int main(int ac, char **av) {
     struct iphdr *iph = (struct iphdr *)packet_to_send;
     struct icmphdr *icmph = (struct icmphdr *)(packet_to_send + sizeof(struct iphdr));
     // Payload
-    char payload[opts.s];
+    char payload[opts.s_value];
     bzero(payload, sizeof(payload));
-    int payload_len = opts.s;
+    int payload_len = opts.s_value;
     // ICMP Header
     // for(uint16_t seq = 0; seq < opts.c; seq++)
     // {
@@ -315,20 +330,23 @@ int main(int ac, char **av) {
             if(recv_icmph->type == ICMP_ECHOREPLY && recv_icmph->un.echo.id == htons(my_id)\
             && recv_icmph->un.echo.sequence == htons(seq)){
                 //64 bytes from 8.8.8.8: icmp_seq=0 ttl=63 time=1.778 ms
-                gettimeofday(&tv_recv, NULL);
-                printf("%ld bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms\n",
-                    bytes_received - ip_header_len,
-                    dst_ip,
-                    seq,
-                    recv_iph->ttl,
-                    (tv_recv.tv_sec - tv_send.tv_sec) * 1000.0 + (tv_recv.tv_usec - tv_send.tv_usec) / 1000.0);
-                    if(!opts.flood && seq + 1 < opts.c_value)
-                        sleep(atoi(opts.i_is_set ? opts.i : "1"));
-                    break;
+                if(!opts.q){
+                    gettimeofday(&tv_recv, NULL);
+                    printf("%ld bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms\n",
+                        bytes_received - ip_header_len,
+                        dst_ip,
+                        seq,
+                        recv_iph->ttl,
+                        (tv_recv.tv_sec - tv_send.tv_sec) * 1000.0 + (tv_recv.tv_usec - tv_send.tv_usec) / 1000.0);
+                        if(!opts.flood && seq + 1 < opts.c_value)
+                            sleep(atoi(opts.i_is_set ? opts.i : "1"));
+                }
+                break;
             };
 
         }
     };
+    printf("Ping statistics for %s:\n", dst_ip);
     close(send_sock);
     close(sock_recv);
     return 0;

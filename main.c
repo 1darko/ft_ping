@@ -211,14 +211,18 @@ int flag_checker(int ac, char **av, options *opts, const char **dst_ip)
 
 int main(int ac, char **av) {
     if(ac < 2) {
-        fprintf(stderr, "Usage: sudo ft_ping [-v] [-?] [-D] [-w deadline] [-c count] <destination>\n");
+        fprintf(stderr, "Usage: sudo ft_ping [-v] [-?] [-D] [-s <size>] [-c <count>] [-q] [-f] [-i <interval>] [-r] <destination>\n");
         return 1;
-    }
+    };
+    if(getuid() != 0){
+        fprintf(stderr, "ft_ping: must be run as root\n");
+        return 1;
+    };
     options opts = {0};
     const char *dst_ip;
     if(flag_checker(ac, av, &opts, &dst_ip)) {
         return 0;
-    }
+    };
     uint16_t my_id = getpid() & 0xFFFF;
     uint16_t seq = 0;
 
@@ -332,6 +336,9 @@ int main(int ac, char **av) {
                 //64 bytes from 8.8.8.8: icmp_seq=0 ttl=63 time=1.778 ms
                 if(!opts.q){
                     gettimeofday(&tv_recv, NULL);
+                    if(opts.D){
+                        printf("[%ld.%06ld] ", tv_recv.tv_sec, tv_recv.tv_usec);
+                    }
                     printf("%ld bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms\n",
                         bytes_received - ip_header_len,
                         dst_ip,
@@ -339,7 +346,7 @@ int main(int ac, char **av) {
                         recv_iph->ttl,
                         (tv_recv.tv_sec - tv_send.tv_sec) * 1000.0 + (tv_recv.tv_usec - tv_send.tv_usec) / 1000.0);
                         if(!opts.flood && seq + 1 < opts.c_value)
-                            sleep(atoi(opts.i_is_set ? opts.i : "1"));
+                            sleep(opts.i_is_set ? atoi(opts.i) : 1);
                 }
                 break;
             };

@@ -7,7 +7,7 @@
 #include <netinet/ip_icmp.h>
 #include <sys/socket.h>
 #include <errno.h>
-
+#define PAYLOAD_SIZE 56  // Taille du payload ICMP
 // Calcule un checksum 16 bits
 unsigned short checksum(void *b, int len) {
     unsigned short *buf = b;
@@ -57,12 +57,15 @@ int main(int argc, char *argv[]) {
     // --- Construction du paquet ---
     char packet[1500];
     memset(packet, 0, sizeof(packet));
+    
 
     struct iphdr *iph = (struct iphdr *)packet;
     struct icmphdr *icmph = (struct icmphdr *)(packet + sizeof(struct iphdr));
 
-    char payload[] = "Hello from raw socket!";
-    int payload_len = strlen(payload);
+    char payload[PAYLOAD_SIZE];
+    bzero(payload, sizeof(payload));
+    // memset(payload + strlen(payload), 0, sizeof(payload) - strlen(payload));
+    int payload_len = PAYLOAD_SIZE;
 
     // ICMP Header
     icmph->type = ICMP_ECHO;
@@ -91,6 +94,17 @@ int main(int argc, char *argv[]) {
     struct sockaddr_in dest = {0};
     dest.sin_family = AF_INET;
     dest.sin_addr.s_addr = inet_addr(dst_ip);
+
+    // printf("Size of packet to send: %lu bytes\n",
+    //        sizeof(struct iphdr) + sizeof(struct icmphdr) + payload_len);
+    printf("Size payload: %lu bytes\n",
+           payload_len);
+    printf("Size of icmphdr: %lu bytes\n",
+           sizeof(struct icmphdr));
+    printf("Size of iphdr: %lu bytes\n",
+        sizeof(struct iphdr));
+
+
 
     // --- Envoi ---
     if (sendto(send_sock, packet,

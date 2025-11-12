@@ -20,6 +20,7 @@
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
 #include <limits.h>
+#include <signal.h>
 
 #define PAYLOAD_SIZE 56
 #define PLAYLOAD_MAX 1473
@@ -46,7 +47,8 @@ typedef struct __attribute__((packed)){
 typedef struct {
    int v;
    int D;
-   int w;
+   char *w;
+   int w_value;
    char *c;
    int c_value;
    char *s;
@@ -56,7 +58,8 @@ typedef struct {
    int i_is_set;
    int q;
    int r;
-
+   int transmited_packages;
+   int received_packages;
 } options;
 
 #endif

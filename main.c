@@ -21,7 +21,20 @@
         Wait interval seconds between sending each packet. The default is to wait for one second between each packet normally this option is only available to the super-user.
 */
 
+/*
+ping f6r6s4.clusters.42paris.fr
+    Gestion adresse IP
+*/
 #include "ping.h"
+
+volatile sig_atomic_t stop = 0;
+
+void handle_sigint(int sig)
+{
+    (void)sig;
+    stop = 1;
+};
+
 unsigned short checksum(void *b, int len);
 void print_question_mark(){
     printf("Usage: sudo ft_ping [-v] [-?] [-D] [-w deadline] [-c count] <destination>\n");
@@ -74,12 +87,10 @@ int flag_checker2(options *opts, char **av)
         fprintf(stderr, "ft_ping: options '-f' and '-i' are mutually exclusive\n");
         return 1;
     }
-    printf("C: -%s-\n", opts->c);
     if(int_overflow(opts->c)){
         fprintf(stderr, "ft_ping: invalid count '%d'\n", opts->c);
         return 1;
     }
-    printf("bug\n");
     if(int_overflow(opts->i)){
         fprintf(stderr, "ft_ping: invalid interval '%s'\n", opts->i);
         return 1;
@@ -249,6 +260,15 @@ int main(int ac, char **av) {
             return 1;
         };
     }
+    // if(1){
+    struct timeval tv;
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+    if(setsockopt(send_sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv) < 0){
+        perror("setsockopt SO_RCVTIMEO");
+        return 1;
+    };  
+    // };
     // receiving part ------------
     int sock_recv = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
     if(sock_recv < 0){
@@ -300,18 +320,27 @@ int main(int ac, char **av) {
     dest_addr.sin_family = AF_INET; // IPv4
     dest_addr.sin_addr.s_addr = iph->daddr; // Destination IP
 
-    printf("Size payload: %lu bytes\n",
-           payload_len);
-    printf("Size of icmphdr: %lu bytes\n",
-           sizeof(struct icmphdr));
-    printf("Size of iphdr: %lu bytes\n",
-        sizeof(struct iphdr));
+    // printf("Size payload: %lu bytes\n",
+    //        payload_len);
+    // printf("Size of icmphdr: %lu bytes\n",
+    //        sizeof(struct icmphdr));
+    // printf("Size of iphdr: %lu bytes\n",
+    //     sizeof(struct iphdr));
 
     // Sending packet(s)
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = handle_sigint;
+    if (sigaction(SIGINT, &sa, NULL) == -1) {
+        fprintf(stderr, "sigaction");
+        return 1;
+    }
+
     char buf[1500];
     struct timeval tv_send, tv_recv;
     for(uint16_t seq = 0; seq < opts.c_value; seq++)
-    {   
+    {   if(stop)
+            break;
         icmph->un.echo.sequence = htons(seq);
         icmph->checksum = 0;
         icmph->checksum = checksum(icmph, sizeof(struct icmphdr) + payload_len);
@@ -321,8 +350,9 @@ int main(int ac, char **av) {
                 perror("sendto");
                 return 1;
                }
+        opts.transmited_packages++;
         // printf("Sent ICMP Echo Request seq=%d to %s\n", seq, dst_ip);
-        while(1){
+        while(1 && !stop){
             ssize_t bytes_received = recv(sock_recv, buf, sizeof(buf), 0);
             if(bytes_received < 0){
                 perror("recv");
@@ -348,12 +378,17 @@ int main(int ac, char **av) {
                         if(!opts.flood && seq + 1 < opts.c_value)
                             sleep(opts.i_is_set ? atoi(opts.i) : 1);
                 }
+                opts.received_packages++;
                 break;
             };
 
         }
     };
-    printf("Ping statistics for %s:\n", dst_ip);
+    printf("--- Ping statistics for %s ---\n", dst_ip);
+    printf("%d packets transmitted, %d packets received, %0.1f%% packet loss\n",
+        opts.transmited_packages,
+        opts.received_packages,
+        ((opts.transmited_packages - opts.received_packages) / (float)opts.transmited_packages) * 100.0);
     close(send_sock);
     close(sock_recv);
     return 0;

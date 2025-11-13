@@ -364,7 +364,7 @@ int main(int ac, char **av) {
 
     char buf[1500];
     struct timeval tv_send, tv_recv;
-    printf("PING [A CHANGER AVEC%             S] (%s) %d data bytes.\n", dst_ip, dst_ip, payload_len);
+    printf("PING %s (A CHANGER) %d data bytes.\n", dst_ip, payload_len);
     for(uint16_t seq = 0; seq < opts.c_value; seq++)
     {   if(stop)
             break;

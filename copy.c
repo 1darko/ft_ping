@@ -26,6 +26,7 @@ ping f6r6s4.clusters.42paris.fr
     Gestion adresse IP
 */
 #include "ping.h"
+#include <signal.h>
 
 volatile sig_atomic_t stop = 0;
 
@@ -83,20 +84,20 @@ int flag_checker2(options *opts, char **av)
         fprintf(stderr, "ft_ping: invalid payload size '%d'\n", opts->s_value);
         return 1;
     }
-    if(opts->w && (atoi(opts->w) <= 0 || int_overflow(opts->w))){
-        fprintf(stderr, "ft_ping: invalid timeout '%s'\n", opts->w);
-        return 1;
-    }
     if(opts->flood && opts->i_is_set){
         fprintf(stderr, "ft_ping: options '-f' and '-i' are mutually exclusive\n");
         return 1;
     }
     if(int_overflow(opts->c)){
-        fprintf(stderr, "ft_ping: invalid count '%d'\n", opts->c);
+        fprintf(stderr, "ft_ping: invalid count '%s'\n", opts->c);
         return 1;
     }
     if(int_overflow(opts->i)){
         fprintf(stderr, "ft_ping: invalid interval '%s'\n", opts->i);
+        return 1;
+    }
+    if(int_overflow(opts->w)){
+        fprintf(stderr, "ft_ping: invalid deadline '%s'\n", opts->w);
         return 1;
     }
     return 0;
@@ -176,6 +177,25 @@ int flag_checker(int ac, char **av, options *opts, const char **dst_ip)
                         }
                         break_flag = 1;
                         break;
+                    case 'w':
+                        if(av[i][j + 1] != '\0'){
+                            if(!isnumeric(&av[i][j + 1])){
+                                return (value_error(av[i], 'w', 1), 1);
+                            }
+                            opts->w = &av[i][j + 1];
+                        }
+                        else if(++i < ac && av[i][0] != '\0') {
+                            if(!isnumeric(av[i])){
+                                return (value_error(av[i], 'w', 0), 1);
+                            }
+                            opts->w = av[i];
+                        }
+                        else{
+                            fprintf(stderr, "ft_ping: option '-w' requires an argument\n");
+                            return 1;
+                        }
+                        break_flag = 1;
+                        break;
                     case 's':
                         if(av[i][j + 1] != '\0'){
                             if(!isnumeric(&av[i][j + 1])){
@@ -191,25 +211,6 @@ int flag_checker(int ac, char **av, options *opts, const char **dst_ip)
                         }
                         else{
                             fprintf(stderr, "ft_ping: option '-s' requires an argument\n");
-                            return 1;
-                        }
-                        break_flag = 1;
-                        break;
-                    case 'W':
-                        if(av[i][j + 1] != '\0'){
-                            if(!isnumeric(&av[i][j + 1])){
-                                return (value_error(av[i], 'W', 1), 1);
-                            }
-                            opts->w = &av[i][j + 1];
-                        }
-                        else if(++i < ac && av[i][0] != '\0') {
-                            if(!isnumeric(av[i])){
-                                return (value_error(av[i], 'W', 0), 1);
-                            }
-                            opts->w = av[i];
-                        }
-                        else{
-                            fprintf(stderr, "ft_ping: option '-W' requires an argument\n");
                             return 1;
                         }
                         break_flag = 1;
@@ -240,6 +241,7 @@ int flag_checker(int ac, char **av, options *opts, const char **dst_ip)
         return 1;
     opts->s_value = (opts->s ? atoi(opts->s) : PAYLOAD_SIZE);
     opts->c_value = (opts->c ? atoi(opts->c) : INT_MAX);
+    opts->w_value = (opts->w ? atoi(opts->w) : 0);
     return 0;
 };
 
@@ -266,13 +268,7 @@ int main(int ac, char **av) {
         perror("send_sock");
         return 1;
     };
-    // receiving part ------------
-    int sock_recv = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
-    if(sock_recv < 0){
-        perror("sock_recv");
-        return 1;
-    };
-    
+
     int on = 1;
     /*  send_sock : la socket qu'on modifie
         IPPROTO_IP: le protocole qu'on modifie
@@ -289,20 +285,27 @@ int main(int ac, char **av) {
             return 1;
         };
     }
-    // TIMEOUT SETTINGS
+    // if(1){
     struct timeval tv;
-    tv.tv_sec = opts.w ? atoi(opts.w) : 1;
-    tv.tv_usec = 0;
-    if(setsockopt(send_sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv) < 0){
-        perror("setsockopt SO_RCVTIMEO");
-        return 1;
-    };  
+    tv.tv_sec = 0;
+    tv.tv_usec = 500000;
     // };
-    if(setsockopt(sock_recv, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv) < 0){
-        perror("setsockopt SO_RCVTIMEO");
+    // receiving part ------------
+    int sock_recv = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+    if(sock_recv < 0){
+        perror("sock_recv");
         return 1;
     };
-    char packet_to_send[1500];
+    if(setsockopt(sock_recv, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0){
+        perror("setsockopt SO_RCVTIMEO");
+        return 1;
+    }
+    if(setsockopt(sock_recv, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0){
+        perror("setsockopt SO_SNDTIMEO");
+        return 1;
+    }
+
+    char packet_to_send[1515];
     memset(packet_to_send, 0, sizeof(packet_to_send));
 
     // Header IP et ICMP
@@ -310,7 +313,7 @@ int main(int ac, char **av) {
     struct icmphdr *icmph = (struct icmphdr *)(packet_to_send + sizeof(struct iphdr));
     // Payload
     char payload[opts.s_value];
-    bzero(payload, sizeof(payload));
+    memset(payload, 0, sizeof(payload));
     int payload_len = opts.s_value;
     // ICMP Header
     // for(uint16_t seq = 0; seq < opts.c; seq++)
@@ -342,7 +345,7 @@ int main(int ac, char **av) {
     // Send the packet
 
     struct sockaddr_in dest_addr;
-    bzero(&dest_addr, sizeof(dest_addr));
+    memset(&dest_addr, 0, sizeof(dest_addr));
     dest_addr.sin_family = AF_INET; // IPv4
     dest_addr.sin_addr.s_addr = iph->daddr; // Destination IP
 
@@ -354,45 +357,54 @@ int main(int ac, char **av) {
     //     sizeof(struct iphdr));
 
     // Sending packet(s)
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = handle_sigint;
-    if (sigaction(SIGINT, &sa, NULL) == -1) {
-        fprintf(stderr, "sigaction");
+    if (signal(SIGINT, handle_sigint) == SIG_ERR) {
+        perror("signal");
         return 1;
     }
 
     char buf[1500];
     struct timeval tv_send, tv_recv;
-    printf("PING [A CHANGER AVEC%             S] (%s) %d data bytes.\n", dst_ip, dst_ip, payload_len);
-    for(uint16_t seq = 0; seq < opts.c_value; seq++)
-    {   if(stop)
-            break;
+    
+    struct timeval start;
+    gettimeofday(&start, NULL);
+    while(!stop){
+        /* Decide whether to stop based on -w (deadline) and -c (count)
+           If -w is set we stop when deadline expired OR when we've received c_value replies.
+           If -w is not set we stop after sending c_value packets (same behaviour as before). */
+        if(opts.w_value > 0){
+            struct timeval now;
+            gettimeofday(&now, NULL);
+            if((now.tv_sec - start.tv_sec) >= opts.w_value)
+                break;
+            if(opts.received_packages >= opts.c_value)
+                break;
+        } else {
+            if(seq >= opts.c_value)
+                break;
+        }
+
         icmph->un.echo.sequence = htons(seq);
         icmph->checksum = 0;
         icmph->checksum = checksum(icmph, sizeof(struct icmphdr) + payload_len);
         gettimeofday(&tv_send, NULL);
-        if(sendto(send_sock, packet_to_send, sizeof(struct iphdr) + sizeof(struct icmphdr) +\
+        if(sendto(send_sock, packet_to_send, sizeof(struct iphdr) + sizeof(struct icmphdr) +
                payload_len, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){
                 perror("sendto");
                 return 1;
                }
         opts.transmited_packages++;
-        // printf("Sent ICMP Echo Request seq=%d to %s\n", seq, dst_ip);
+
         while(1 && !stop){
             ssize_t bytes_received = recv(sock_recv, buf, sizeof(buf), 0);
             if(bytes_received < 0){
-                if(errno == 11) // timeout
-                    break;
                 perror("recv");
-                continue;   
+                continue;
             };
             struct iphdr *recv_iph = (struct iphdr *)buf;
             ssize_t ip_header_len = recv_iph->ihl * 4;
             struct icmphdr *recv_icmph = (struct icmphdr *)(buf + ip_header_len);
-            if(recv_icmph->type == ICMP_ECHOREPLY && recv_icmph->un.echo.id == htons(my_id)\
+            if(recv_icmph->type == ICMP_ECHOREPLY && recv_icmph->un.echo.id == htons(my_id)
             && recv_icmph->un.echo.sequence == htons(seq)){
-                //64 bytes from 8.8.8.8: icmp_seq=0 ttl=63 time=1.778 ms
                 if(!opts.q){
                     gettimeofday(&tv_recv, NULL);
                     if(opts.D){
@@ -404,14 +416,19 @@ int main(int ac, char **av) {
                         seq,
                         recv_iph->ttl,
                         (tv_recv.tv_sec - tv_send.tv_sec) * 1000.0 + (tv_recv.tv_usec - tv_send.tv_usec) / 1000.0);
-                        if(!opts.flood && seq + 1 < opts.c_value)
-                            sleep(opts.i_is_set ? atoi(opts.i) : 1);
+                    /* Sleep only if not flood and we are going to send more packets
+                       For deadline mode we don't know exactly how many will be sent, so don't guard by seq here. */
+                    if(!opts.flood && opts.w_value == 0 && seq + 1 < opts.c_value)
+                        sleep(opts.i_is_set ? atoi(opts.i) : 1);
+                    else if(!opts.flood && opts.w_value > 0)
+                        sleep(opts.i_is_set ? atoi(opts.i) : 1);
                 }
                 opts.received_packages++;
                 break;
             };
 
         }
+        seq++;
     };
     printf("--- Ping statistics for %s ---\n", dst_ip);
     printf("%d packets transmitted, %d packets received, %0.1f%% packet loss\n",

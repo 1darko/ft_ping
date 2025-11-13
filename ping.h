@@ -60,6 +60,7 @@ typedef struct {
    int r;
    int transmited_packages;
    int received_packages;
+   char *ipv4;
 } options;
 
 #endif

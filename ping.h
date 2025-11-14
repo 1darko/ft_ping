@@ -60,7 +60,7 @@ typedef struct {
    int r;
    int transmited_packages;
    int received_packages;
-   char *ipv4;
+   char ipv4[INET_ADDRSTRLEN];
 } options;
 
 #endif

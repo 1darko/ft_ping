@@ -9,7 +9,7 @@
     -D 
         Print timestamp (unix time + microseconds as in gettimeofday) before each line.
 
-    -w deadline
+    -W deadline
         Specify a timeout, in seconds, before ping exits regardless of how many packets have been sent or received. In this case ping does not stop after count packet are sent, it waits either for deadline
         expire or until count probes are answered or for some error notification from network.
 
@@ -77,7 +77,7 @@ int int_overflow(char *a)
     }
     return 0;
 }
-int flag_checker2(options *opts, char **av)
+int flag_checker2(options *opts)
 {
     if(opts->s_value < 0 || opts->s_value > 1473){
         fprintf(stderr, "ft_ping: invalid payload size '%d'\n", opts->s_value);
@@ -92,7 +92,7 @@ int flag_checker2(options *opts, char **av)
         return 1;
     }
     if(int_overflow(opts->c)){
-        fprintf(stderr, "ft_ping: invalid count '%d'\n", opts->c);
+        fprintf(stderr, "ft_ping: invalid count '%s'\n", opts->c);
         return 1;
     }
     if(int_overflow(opts->i)){
@@ -102,6 +102,8 @@ int flag_checker2(options *opts, char **av)
     return 0;
 
 }
+int resolve_ip(const char *name_or_ip, options *opts);
+
 int flag_checker(int ac, char **av, options *opts, const char **dst_ip)
 {
     opts->s_value = PAYLOAD_SIZE; // to add option -s for payload size later
@@ -236,7 +238,7 @@ int flag_checker(int ac, char **av, options *opts, const char **dst_ip)
             fprintf(stderr, "Try 'ft_ping -?' for more information.\n");
             return 1;
     }
-    if(flag_checker2(opts, av))
+    if(flag_checker2(opts))
         return 1;
     opts->s_value = (opts->s ? atoi(opts->s) : PAYLOAD_SIZE);
     opts->c_value = (opts->c ? atoi(opts->c) : INT_MAX);
@@ -256,6 +258,10 @@ int main(int ac, char **av) {
     const char *dst_ip;
     if(flag_checker(ac, av, &opts, &dst_ip)) {
         return 0;
+    };
+    if(resolve_ip(dst_ip, &opts) != 0){
+        fprintf(stderr, "ft_ping: unknown host %s\n", dst_ip);
+        return 1;
     };
     uint16_t my_id = getpid() & 0xFFFF;
     uint16_t seq = 0;
@@ -283,18 +289,23 @@ int main(int ac, char **av) {
         perror("setsockopt IP_HDRINCL");
         return 1;
     };
+    // Pour traceroute / record route
+    // if(setsockopt(send_sock, IPPROTO_IP, IP_OPTIONS, &on, sizeof(on)) < 0){
+    //     perror("setsockopt IP_OPTIONS");
+    //     return 1;
+    // };
     if(opts.r){
-        if(setsockopt(send_sock, IPPROTO_IP, IP_OPTIONS, &on, sizeof(on)) < 0){
-            perror("setsockopt IP_OPTIONS");
+        if(setsockopt(send_sock, SOL_SOCKET, SO_DONTROUTE, &on, sizeof(on)) < 0){
+            perror("setsockopt SO_DONTROUTE");
             return 1;
         };
     }
     // TIMEOUT SETTINGS
     struct timeval tv;
-    tv.tv_sec = opts.w ? atoi(opts.w) : 1;
+    tv.tv_sec = opts.w ? atoi(opts.w) : 10;
     tv.tv_usec = 0;
     if(setsockopt(send_sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv) < 0){
-        perror("setsockopt SO_RCVTIMEO");
+        perror("setsockopt SO_SNDTIMEO");
         return 1;
     };  
     // };
@@ -336,7 +347,9 @@ int main(int ac, char **av) {
     iph->protocol = IPPROTO_ICMP;
     // iph->check = 0; 
     iph->saddr = inet_addr("0.0.0.0"); // kernel will fill the correct source IP
-    iph->daddr = inet_addr(dst_ip); // destination IP
+    iph->daddr = inet_addr(opts.ipv4); // destination IP
+    //    opts.r ? (iph->daddr = inet_addr(dst_ip)) : (iph->daddr = inet_addr(opts.ipv4)); // destination IP
+
     // iph->check = checksum(iph, sizeof(struct iphdr));
 
     // Send the packet
@@ -364,7 +377,10 @@ int main(int ac, char **av) {
 
     char buf[1500];
     struct timeval tv_send, tv_recv;
-    printf("PING %s (A CHANGER) %d data bytes.\n", dst_ip, payload_len);
+    printf("PING %s (%s) %d data bytes", dst_ip, opts.ipv4, payload_len);
+    if(opts.v)
+        printf(", id 0x0%x = %d", htons(icmph->un.echo.id), my_id);
+    printf("\n");
     for(uint16_t seq = 0; seq < opts.c_value; seq++)
     {   if(stop)
             break;
@@ -382,8 +398,10 @@ int main(int ac, char **av) {
         while(1 && !stop){
             ssize_t bytes_received = recv(sock_recv, buf, sizeof(buf), 0);
             if(bytes_received < 0){
-                if(errno == 11) // timeout
+                if(errno == 11){
+                    if(opts.v) printf("From %s (%s) icmp_seq=%d Time to live exceeded\n", dst_ip, opts.ipv4, seq);
                     break;
+                }
                 perror("recv");
                 continue;   
             };
@@ -439,3 +457,29 @@ unsigned short checksum(void *b, int len) {
 };
 
 
+int resolve_ip(const char *name_or_ip, options *opts)
+{
+    struct addrinfo hints;
+    struct addrinfo *res = NULL;
+    int rc;
+    // char ipstr[INET_ADDRSTRLEN];
+    // if (!name_or_ip || !(*resolved_ip))
+        // return 1;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;        /* force IPv4 */
+    hints.ai_socktype = 0;            /* pas de contrainte */
+
+    rc = getaddrinfo(name_or_ip, NULL, &hints, &res);
+    if(rc == 0)
+    {
+        struct sockaddr_in *sin = (struct sockaddr_in *)res->ai_addr;
+        // *resolved_ip = sin->sin_addr.s_addr; /* déjà en network byte order */
+        char ipstr[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &sin->sin_addr, ipstr, sizeof(ipstr));
+        // printf("%s -> %s\n", name_or_ip, ipstr);
+        strcpy(opts->ipv4, ipstr);
+        freeaddrinfo(res);
+        return 0;
+    }
+    return 1;
+}

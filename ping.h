@@ -63,4 +63,25 @@ typedef struct {
    char ipv4[INET_ADDRSTRLEN];
 } options;
 
+extern volatile sig_atomic_t stop;
+
+int resolve_ip(const char *name_or_ip, options *opts);
+unsigned short checksum(void *b, int len);
+int flag_checker(int ac, char **av, options *opts, const char **dst_ip);
+int flag_checker2(options *opts);
+int int_overflow(char *a);
+void value_error(const char *value, char near_char, int type);
+int isnumeric(const char *str);
+void print_question_mark();
+void handle_sigint(int sig);
+int ping_loop(int send_sock, int sock_recv, options *opts,
+              const char *dst_ip, char *packet,
+              struct icmphdr *icmph, struct sockaddr_in *dest_addr,
+              uint16_t my_id);
+int receive_reply(int sock_recv, options *opts, const char *dst_ip,
+                  uint16_t my_id, uint16_t seq, struct timeval tv_send);
+void build_packet(char *packet, struct iphdr **iph, struct icmphdr **icmph,
+                  options *opts, uint16_t my_id);
+int init_sockets(options *opts, int *send_sock, int *sock_recv);
+
 #endif

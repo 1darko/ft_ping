@@ -4,7 +4,7 @@ CFLAGS = -Wall -Wextra -Werror -g
 RM = rm -f
 
 
-SRCS = main.c
+SRCS = main.c parser.c ping.c
 
 OBJS = $(SRCS:.c=.o)
 

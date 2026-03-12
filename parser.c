@@ -11,7 +11,7 @@ int isnumeric(const char *str){
 }
 
 void value_error(const char *value, char near_char, int type){
-    fprintf(stderr, "ping: invalid value (`%s' near `%c')\n", type ? value + 2 : value, near_char);
+    fprintf(stderr, "ft_ping: invalid value (`%s' near `%c')\n", type ? value + 2 : value, near_char);
     fprintf(stderr, "Try 'ft_ping -?' for more information.\n");
 }
 
@@ -140,10 +140,10 @@ int flag_checker(int ac, char **av, options *opts, const char **dst_ip)
         fprintf(stderr, "Try 'ft_ping -?' for more information.\n");
         return 1;
     }
-    if (flag_checker2(opts))
-        return 1;
     opts->s_value = (opts->s ? atoi(opts->s) : PAYLOAD_SIZE);
     opts->c_value = (opts->c ? atoi(opts->c) : INT_MAX);
+    if (flag_checker2(opts))
+        return 1;
     return 0;
 }
 

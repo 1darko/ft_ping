@@ -40,9 +40,9 @@ int receive_reply(int sock_recv, options *opts, const char *dst_ip,
         ssize_t n = recv(sock_recv, buf, sizeof(buf), 0);
         if (n < 0) {
             if (errno == EAGAIN) {
-                if (opts->v)
-                    printf("From %s (%s) icmp_seq=%d Time to live exceeded\n",
-                           dst_ip, opts->ipv4, seq);
+                // if (opts->v)
+                //     printf("From %s (%s) icmp_seq=%d Time to live exceeded\n",
+                //            dst_ip, opts->ipv4, seq);
                 return 0;
             }
             perror("recv");

@@ -92,7 +92,7 @@ int main(int ac, char **av)
     if (flag_checker(ac, av, &opts, &dst_ip))
         return 1;
     if (resolve_ip(dst_ip, &opts) != 0) {
-        fprintf(stderr, "ft_ping: unknown host %s\n", dst_ip);
+        fprintf(stderr, "ft_ping: %s: Name or service not known\n", dst_ip);
         return 1;
     }
 
@@ -276,8 +276,7 @@ int main(int ac, char **av)
 //         icmph->checksum = 0;
 //         icmph->checksum = checksum(icmph, sizeof(struct icmphdr) + payload_len);
 //         gettimeofday(&tv_send, NULL);
-//         if(sendto(send_sock, packet_to_send, sizeof(struct iphdr) + sizeof(struct icmphdr) +\
-//                payload_len, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){
+//         if(sendto(send_sock, packet_to_send, sizeof(struct iphdr) + sizeof(struct icmphdr) + payload_len, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){
 //                 perror("sendto");
 //                 return 1;
 //                }
@@ -296,8 +295,7 @@ int main(int ac, char **av)
 //             struct iphdr *recv_iph = (struct iphdr *)buf;
 //             ssize_t ip_header_len = recv_iph->ihl * 4;
 //             struct icmphdr *recv_icmph = (struct icmphdr *)(buf + ip_header_len);
-//             if(recv_icmph->type == ICMP_ECHOREPLY && recv_icmph->un.echo.id == htons(my_id)\
-//             && recv_icmph->un.echo.sequence == htons(seq)){
+//             if(recv_icmph->type == ICMP_ECHOREPLY && recv_icmph->un.echo.id == htons(my_id) && recv_icmph->un.echo.sequence == htons(seq)){
 //                 //64 bytes from 8.8.8.8: icmp_seq=0 ttl=63 time=1.778 ms
 //                 if(!opts.q){
 //                     gettimeofday(&tv_recv, NULL);

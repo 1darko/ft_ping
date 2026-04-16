@@ -20,8 +20,7 @@ fclean: clean
 	$(RM) $(NAME)
 
 run : re
-	sudo ./$(NAME) -D -v -s 1400 -W 1 8.8.8.8
-
+	sudo ./$(NAME) -W 1 82.18.48.238
 re: fclean all
 
 .PHONY: all clean fclean re

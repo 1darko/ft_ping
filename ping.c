@@ -51,7 +51,14 @@ int receive_reply(int sock_recv, options *opts, const char *dst_ip,
         struct iphdr   *recv_iph   = (struct iphdr *)buf;
         ssize_t         ip_hlen    = recv_iph->ihl * 4;
         struct icmphdr *recv_icmph = (struct icmphdr *)(buf + ip_hlen);
-
+        // char src_ip[INET_ADDRSTRLEN];
+        // inet_ntop(AF_INET, &recv_iph->saddr, src_ip, sizeof(src_ip));
+        // printf("DEBUG recv: src=%s type=%d id=%d seq=%d ttl=%d\n",
+        //     src_ip,
+        //     recv_icmph->type,
+        //     ntohs(recv_icmph->un.echo.id),
+        //     ntohs(recv_icmph->un.echo.sequence),
+        //     recv_iph->ttl);
         if (recv_icmph->type           == ICMP_ECHOREPLY
          && recv_icmph->un.echo.id     == htons(my_id)
          && recv_icmph->un.echo.sequence == htons(seq))
@@ -63,7 +70,7 @@ int receive_reply(int sock_recv, options *opts, const char *dst_ip,
                 if (opts->D)
                     printf("[%ld.%06ld] ", tv_recv.tv_sec, tv_recv.tv_usec);
                 printf("%ld bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms\n",
-                    n - ip_hlen, dst_ip, seq, recv_iph->ttl,
+                    n - ip_hlen, dst_ip, seq + 1, recv_iph->ttl,
                     (tv_recv.tv_sec  - tv_send.tv_sec)  * 1000.0 +
                     (tv_recv.tv_usec - tv_send.tv_usec) / 1000.0);
             }

@@ -74,7 +74,7 @@ int receive_reply(int sock_recv, options *opts, const char *dst_ip,
                     (tv_recv.tv_sec  - tv_send.tv_sec)  * 1000.0 +
                     (tv_recv.tv_usec - tv_send.tv_usec) / 1000.0);
             }
-            return 1; // got response.
+            return 1; // got response..
         }
     }
     return 0;
